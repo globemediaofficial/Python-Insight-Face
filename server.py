@@ -21,7 +21,7 @@ face_model = insightface.app.FaceAnalysis(
 face_model.prepare(ctx_id=-1)
 
 # NudeNet v3 classifier
-nsfw_model = predict.load_model("/models/nsfw_mobilenet_v3.pt")
+nsfw_model = predict.load_model("/nsfw_mobilenet_v3.pt")
 # Download: https://github.com/notAI-tech/NudeNet/releases
 
 # ------------------------------
