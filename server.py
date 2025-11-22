@@ -5,7 +5,7 @@ from PIL import Image
 import base64
 import io
 import insightface
-from nudenet import NudeClassifier
+from nudenet import NudeDetector
 
 app = FastAPI(title="Self-Hosted Vision Server")
 
@@ -20,8 +20,8 @@ face_model = insightface.app.FaceAnalysis(
 )
 face_model.prepare(ctx_id=-1)
 
-# NudeNet v3 classifier
-nsfw_model = NudeClassifier(model_path="nsfw_mobilenet_v3.pt")  # ONNX or .pt
+# NudeNet v3 detector
+detector = NudeDetector()
 
 # ------------------------------
 # Request Types
@@ -99,6 +99,16 @@ def detect_face(req: FaceDetectRequest):
 # NSFW Detection API
 # ------------------------------
 
+# Sexual exposure labels to compute "unsafe" score
+sexual_labels = [
+    "FEMALE_GENITALIA_EXPOSED",
+    "MALE_GENITALIA_EXPOSED",
+    "FEMALE_BREAST_EXPOSED",
+    "MALE_BREAST_EXPOSED",
+    "BUTTOCKS_EXPOSED",
+    "BELLY_EXPOSED"
+]
+
 @app.post("/nsfw")
 def nsfw_check(req: NSFWRequest):
     try:
@@ -106,13 +116,13 @@ def nsfw_check(req: NSFWRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # NudeNet v3 accepts np.ndarray directly
-    output = nsfw_model.classify_ndarray(img)
-    # output example: {"safe": 0.85, "unsafe": 0.15}
-
-    unsafe_score = float(output.get("unsafe", 0))
+    detections = detector.detect(img)
+    
+    # Unsafe score: sum of sexual exposure probabilities
+    unsafe_score = sum(d["score"] for d in detections if d["class"] in sexual_labels)
 
     return {
-        "scores": output,
-        "unsafe": unsafe_score > 0.3  # threshold
+        "detections": detections,
+        "unsafe_score": unsafe_score,
+        "unsafe": unsafe_score > 0.3
     }
