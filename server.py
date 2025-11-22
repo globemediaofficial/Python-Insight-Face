@@ -1,20 +1,46 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import insightface
 import numpy as np
 from PIL import Image
 import base64
 import io
+import insightface
+from nsfw_detector import predict
 
-app = FastAPI(title="Face Verification Server")
+app = FastAPI(title="Self-Hosted Vision Server")
 
-# Initialize InsightFace model (CPU mode)
-model = insightface.app.FaceAnalysis(providers=["CPUExecutionProvider"])
-model.prepare(ctx_id=-1)  # CPU
+# ------------------------------
+# Load Models
+# ------------------------------
+
+# InsightFace: SCRFD + MobileFaceNet
+face_model = insightface.app.FaceAnalysis(
+    name="buffalo_l",
+    providers=["CPUExecutionProvider"]
+)
+face_model.prepare(ctx_id=-1)
+
+# NudeNet v3 classifier
+nsfw_model = predict.load_model("/models/nsfw_mobilenet_v3.pt")
+# Download: https://github.com/notAI-tech/NudeNet/releases
+
+# ------------------------------
+# Request Types
+# ------------------------------
 
 class VerifyRequest(BaseModel):
-    image1: str  # base64
-    image2: str  # base64
+    image1: str  # base64 string
+    image2: str  # base64 string
+
+class NSFWRequest(BaseModel):
+    image: str  # base64
+
+class FaceDetectRequest(BaseModel):
+    image: str  # base64
+
+# ------------------------------
+# Helpers
+# ------------------------------
 
 def image_from_base64(b64: str) -> np.ndarray:
     try:
@@ -22,6 +48,10 @@ def image_from_base64(b64: str) -> np.ndarray:
         return np.array(Image.open(io.BytesIO(img_bytes)).convert("RGB"))
     except Exception as e:
         raise ValueError(f"Invalid image data: {e}")
+
+# ------------------------------
+# Face Verification
+# ------------------------------
 
 @app.post("/verify")
 def verify_faces(req: VerifyRequest):
@@ -31,8 +61,8 @@ def verify_faces(req: VerifyRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    faces1 = model.get(img1)
-    faces2 = model.get(img2)
+    faces1 = face_model.get(img1)
+    faces2 = face_model.get(img2)
 
     if not faces1 or not faces2:
         raise HTTPException(status_code=400, detail="No face detected in one or both images")
@@ -41,4 +71,52 @@ def verify_faces(req: VerifyRequest):
     emb2 = faces2[0].embedding
 
     similarity = float(np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2)))
-    return {"similarity": similarity, "match": similarity > 0.5}
+
+    return {
+        "similarity": similarity,
+        "match": similarity > 0.40  # Suggested threshold
+    }
+
+# ------------------------------
+# Face Detection API
+# ------------------------------
+
+@app.post("/detect_face")
+def detect_face(req: FaceDetectRequest):
+    try:
+        img = image_from_base64(req.image)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    faces = face_model.get(img)
+
+    return {
+        "faces": len(faces),
+        "hasFace": len(faces) > 0,
+        "bboxes": [f.bbox.tolist() for f in faces]
+    }
+
+# ------------------------------
+# NSFW Detection API
+# ------------------------------
+
+@app.post("/nsfw")
+def nsfw_check(req: NSFWRequest):
+    try:
+        img = image_from_base64(req.image)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # NudeNet expects a file path or PIL image
+    pil_img = Image.fromarray(img)
+
+    output = predict.classify_ndarray(nsfw_model, np.array(pil_img))
+
+    # Example output:
+    # {"unsafe": 0.03, "neutral": 0.90, "sexy": 0.05, "porn": 0.02}
+    unsafe_score = float(output.get("porn", 0) + output.get("sexy", 0))
+
+    return {
+        "scores": output,
+        "unsafe": unsafe_score > 0.3
+    }
