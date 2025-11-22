@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages
-RUN pip install --no-cache-dir fastapi uvicorn insightface numpy pillow
+RUN pip install --no-cache-dir fastapi uvicorn insightface numpy pillow onnxruntime
 
 # Copy server code
 WORKDIR /app
