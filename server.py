@@ -5,7 +5,7 @@ from PIL import Image
 import base64
 import io
 import insightface
-from nsfw_detector import predict
+from nudenet import NudeClassifier
 
 app = FastAPI(title="Self-Hosted Vision Server")
 
@@ -21,8 +21,7 @@ face_model = insightface.app.FaceAnalysis(
 face_model.prepare(ctx_id=-1)
 
 # NudeNet v3 classifier
-nsfw_model = predict.load_model("/nsfw_mobilenet_v3.pt")
-# Download: https://github.com/notAI-tech/NudeNet/releases
+nsfw_model = NudeClassifier(model_path="nsfw_mobilenet_v3.pt")  # ONNX or .pt
 
 # ------------------------------
 # Request Types
@@ -107,16 +106,13 @@ def nsfw_check(req: NSFWRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # NudeNet expects a file path or PIL image
-    pil_img = Image.fromarray(img)
+    # NudeNet v3 accepts np.ndarray directly
+    output = nsfw_model.classify_ndarray(img)
+    # output example: {"safe": 0.85, "unsafe": 0.15}
 
-    output = predict.classify_ndarray(nsfw_model, np.array(pil_img))
-
-    # Example output:
-    # {"unsafe": 0.03, "neutral": 0.90, "sexy": 0.05, "porn": 0.02}
-    unsafe_score = float(output.get("porn", 0) + output.get("sexy", 0))
+    unsafe_score = float(output.get("unsafe", 0))
 
     return {
         "scores": output,
-        "unsafe": unsafe_score > 0.3
+        "unsafe": unsafe_score > 0.3  # threshold
     }
