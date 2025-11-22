@@ -10,7 +10,7 @@ app = FastAPI(title="Face Verification Server")
 
 # Initialize InsightFace model (CPU mode)
 model = insightface.app.FaceAnalysis(providers=["CPUExecutionProvider"])
-model.prepare(ctx_id=-1, nms=0)  # CPU
+model.prepare(ctx_id=-1)  # CPU
 
 class VerifyRequest(BaseModel):
     image1: str  # base64
