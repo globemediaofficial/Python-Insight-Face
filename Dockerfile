@@ -9,8 +9,16 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python packages
-RUN pip install --no-cache-dir fastapi uvicorn insightface numpy pillow onnxruntime
+# Install Python packages (added nudenet + opencv-python)
+RUN pip install --no-cache-dir \
+    fastapi \
+    uvicorn \
+    insightface \
+    numpy \
+    pillow \
+    onnxruntime \
+    nudenet \
+    opencv-python
 
 # Copy server code
 WORKDIR /app
