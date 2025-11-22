@@ -1,5 +1,5 @@
 # Use lightweight Python image
-FROM python:3.11-slim
+FROM python:3.11-bullseye
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
