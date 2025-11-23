@@ -104,9 +104,7 @@ sexual_labels = [
     "FEMALE_GENITALIA_EXPOSED",
     "MALE_GENITALIA_EXPOSED",
     "FEMALE_BREAST_EXPOSED",
-    "MALE_BREAST_EXPOSED",
     "BUTTOCKS_EXPOSED",
-    "BELLY_EXPOSED"
 ]
 
 @app.post("/nsfw")
